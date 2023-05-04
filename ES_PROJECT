@@ -1,0 +1,74 @@
+#include <LPC17xx.h>
+
+#include<stdint.h>
+
+#include<stdlib.h>
+
+// Define constants for temperature calculation
+#define T_REF 100 // Reference voltage
+#define ROOM_TEMP 25.0 // Typical room temperature
+#define TEMP_THRESHOLD 30.0 // Temperature threshold for turning on the fan // Pin for controlling the fan
+#define FAN_PIN 21
+
+// Global variable
+volatile uint32_t gpio_pin_state = 0;
+int temperature;
+int i;
+
+// Function to initialize ADC
+void init_adc(void) {
+  LPC_SC -> PCONP |= (1 << 12); // Enable ADC power/clock
+  LPC_PINCON -> PINSEL1 &= ~(3 << 28); // P1.30 is GPIO
+  LPC_GPIO1 -> FIODIR &= ~(1 <<4); // Set P1.30 as input
+  LPC_PINCON -> PINSEL1 |= (3 << 28); // P0.24 is ADC0.4
+  LPC_ADC -> ADCR = (1 << 4) | // Enable ADC0.4 channel
+    (1 << 21);
+
+    }
+
+// Function to read ADC value
+void read_adc(void) {
+  int adc_value = rand();
+  LPC_ADC -> ADCR |= (1 << 24); // Start ADC conversion
+  while (!(LPC_ADC -> ADGDR & (1 << 31))); // Wait for conversion to complete
+  temperature = (T_REF * adc_value / 4096);
+  LPC_ADC -> ADGDR = temperature >> 4;
+  // Calculate temperature in degrees Celsius
+  for (i = 0; i < 20000; i++);
+}
+
+// Function to initialize GPIO for controlling fan
+
+void init_fan(void) {
+  LPC_GPIO1 -> FIODIR |= (1 << FAN_PIN); // Set fan pin as output
+  LPC_GPIO1 -> FIOCLR |= (1 << FAN_PIN); // Turn off fan initially
+  gpio_pin_state = 0;
+}
+
+//Main function
+
+int main(void) {
+
+  while (1) {
+    init_adc(); // Initialise ADC
+    init_fan();
+    // Generate a random ADC value between 0 and 1023
+
+    read_adc();
+
+    if (temperature >= TEMP_THRESHOLD) {
+      LPC_GPIO1 -> FIOSET |= (1 << 21); // Turn on the fan if temperature is above threshold
+      gpio_pin_state = 1;
+      // Add a delay to let the fan spin up
+      for (i = 0; i < 100000; i++);
+    } else {
+      LPC_GPIO1 -> FIOCLR |= (1 << 21); // Turn off fan if temperature is below threshold
+      gpio_pin_state = 0;
+      // Add a delay to let the fan spin down
+      for (i = 0; i < 100000; i++);
+    }
+  }
+}
+
+
+
